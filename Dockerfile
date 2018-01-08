@@ -60,11 +60,6 @@ RUN usermod -u 1000 www-data
 
 RUN echo 'alias sf3="php bin/console"' >> ~/.bashrc
 
-# Install Symfony installer
-RUN mkdir -p /usr/local/bin
-RUN curl -LsS https://symfony.com/installer -o /usr/local/bin/symfony
-RUN chmod a+x /usr/local/bin/symfony
-
 WORKDIR /var/www/
 
 # Make ssh dir
