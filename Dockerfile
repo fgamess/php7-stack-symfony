@@ -1,8 +1,12 @@
 FROM php:7.1-fpm
 
+ENV DEBIAN_FRONTEND noninteractive
+ENV DEFAULT_TIMEZONE Asia/Dubai
+
 ### Install dependencies
 RUN apt-get update \
     && apt-get install -y \
+    locales tzdata \
     git \
     zlib1g-dev \
     libmcrypt-dev \
@@ -11,8 +15,12 @@ RUN apt-get update \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
+    libpq-dev \
+    libxml2-dev \
+    zip \
+    unzip \
     --no-install-recommends \
-    && mkdir -p /var/run/sshd \
+    && rm -rf /tmp/* /var/tmp/* \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install bcmath \
@@ -23,9 +31,14 @@ RUN docker-php-ext-install bcmath \
     mcrypt \
     pdo \
     pdo_mysql \
+    pdo_pgsql \
     mysqli \
     exif \
-    intl
+    intl \
+    soap
+
+RUN docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
+    && docker-php-ext-install pdo pdo_pgsql pgsql
 
 RUN docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
 RUN docker-php-ext-install gd
@@ -36,9 +49,14 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 RUN composer --version
 
 # Set timezone
-RUN rm /etc/localtime
-RUN ln -s /usr/share/zoneinfo/Europe/Paris /etc/localtime
-RUN "date"
+RUN mkdir /tz && mv /etc/timezone /tz/ && mv /etc/localtime /tz/ \
+    && ln -s /tz/timezone /etc/ && ln -s /tz/localtime /etc/
+
+#  Common for all tradetracker images
+RUN echo "${DEFAULT_TIMEZONE}" > /etc/timezone && dpkg-reconfigure -f noninteractive tzdata \
+    && cp /etc/timezone /tz/ && cp /etc/localtime /tz/ &2> \dev\null
+
+VOLUME /tz
 
 # install xdebug
 RUN pecl install xdebug
@@ -51,16 +69,10 @@ RUN echo "xdebug.remote_connect_back=1" >> /usr/local/etc/php/conf.d/docker-php-
 RUN echo "xdebug.idekey=\"PHPSTORM\"" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 RUN echo "xdebug.remote_port=9001" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 RUN echo "xdebug.cli_color=1\nxdebug.remote_autostart=1\nxdebug.remote_connect_back=1" > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
-
-COPY php.ini /tmp/php.ini_extension
-RUN cat /tmp/php.ini_extension >> /usr/local/etc/php/php.ini \
-    && rm /tmp/php.ini_extension
+RUN docker-php-ext-enable xdebug
 
 RUN usermod -u 1000 www-data
 
-RUN echo 'alias sf3="php bin/console"' >> ~/.bashrc
+RUN echo 'alias sf="php bin/console"' >> ~/.bashrc
 
-WORKDIR /var/www/
-
-# Make ssh dir
-RUN mkdir /root/.ssh/
+WORKDIR /var/www
